@@ -1,17 +1,15 @@
 var fs = require('fs'),
-        events = require('events');
+    events = require('events'),
+    Renderer = require('./Renderer');
 
 function Template(params) {
-    // Construct object
-    var obj = Object.create(Template.prototype);
+    // Construct thisect
+    var that = this;
 
     // Set properties
-    obj.file = params.file;
-    obj._tokenized = false;
-    obj._render_queue = [];
-    obj._params = {
-        tag_tokens: ['{%', '%}'],
-        var_tokens: ['{{', '}}'],
+    this.file = params.file;
+    this._tokenized = false;
+    this._params = {
         tokens: {
             'tag': ['{%', '%}'],
             'var': ['{{', '}}'],
@@ -22,10 +20,19 @@ function Template(params) {
 
     // Load file
     if (params.file) {
-        obj.loadFile(params.file);
+        this.loadFile(params.file);
     }
 
-    return obj;
+    // Setup renderer constructor
+    this.Renderer = function (context) {
+        Renderer.call(this, {
+            template: that,
+            context: context
+        });
+    };
+    this.Renderer.prototype = Renderer.prototype;
+
+    return this;
 }
 
 Template.prototype = Object.create(events.EventEmitter.prototype);
@@ -38,7 +45,7 @@ Template.prototype.loadFile = function (file) {
 };
 
 Template.prototype.tokenizeData = function (data) {
-    var that = this, tokens, data, i;
+    var that = this, tokens, data, i, position, type, token;
 
     // Find all possible starting token positions
     tokens = [];
@@ -51,14 +58,13 @@ Template.prototype.tokenizeData = function (data) {
         }
         return callee;
     }
-        (this._params.tag_tokens[0])
-        (this._params.var_tokens[0]));
+        (this._params.tokens['tag'][0])
+        (this._params.tokens['var'][0]));
     tokens.sort();
 
     // Parse expressions
     this._blocks = [];
-
-    var position = 0, type;
+    position = 0;
     for (i = 0; i < tokens.length; i += 1) {
         // Skip to next token
         if (position >= tokens[i]) {
@@ -72,7 +78,8 @@ Template.prototype.tokenizeData = function (data) {
         }
 
         // Parse token type
-        type = (data.substr(position, this._params.tag_tokens[0].length) == this._params.tag_tokens[0]) ? 'tag' : 'var';
+        token = this._params.tokens['tag'][0];
+        type = (data.substr(position, token.length) === token) ? 'tag': 'var';
 
         // Helper functions
         function skip_whitespace() {
@@ -81,20 +88,23 @@ Template.prototype.tokenizeData = function (data) {
                 position += whitespace.length;
             }
         }
-        function read_var() {
+        function read_variable() {
             var match, token;
             skip_whitespace();
             if ((token = that._params.tokens['seperator']) &&
                     data.substr(position, token.length) === token) {
                 position += that._params.tokens['seperator'].length;
                 return {type: 'seperator'};
-            } else if (data.substr(position, that._params.tag_tokens[1].length) == that._params.tag_tokens[1]) {
-                position += that._params.tag_tokens[1].length;
+            } else if ((token = that._params.tokens['tag'][1]) &&
+                    data.substr(position, token.length) === token) {
+                position += that._params.tokens['tag'][1].length;
                 return {type: 'end', name: 'tag'};
-            } else if (data.substr(position, that._params.var_tokens[1].length) == that._params.var_tokens[1]) {
-                position += that._params.tag_tokens[1].length;
+            } else if ((token = that._params.tokens['var'][1]) &&
+                    data.substr(position, token.length) === token) {
+                position += that._params.tokens['tag'][1].length;
                 return {type: 'end', name: 'var'};
-            } else if (match = data.substr(position).match(/^[a-zA-Z_$][0-9a-zA-Z_$.]*/)) {
+            } else if (match =
+                    data.substr(position).match(/^[a-zA-Z_$][0-9a-zA-Z_$.]*/)) {
                 position += match[0].length;
                 return {
                     type: 'var',
@@ -112,13 +122,14 @@ Template.prototype.tokenizeData = function (data) {
             type: type,
             variables: []
         };
-        while (variable = read_var()) {
+        while (variable = read_variable()) {
             if (variable.type === 'end') {
                 if (variable.name === type) {
                     this._blocks.push(block);
                     break;
                 } else {
-                    this.emit('compiled', 'Parsing error: found incorrect end token type.');
+                    this.emit('compiled',
+                            'Parsing error: found incorrect end token type.');
                     return;
                 }
             } else {
@@ -126,7 +137,8 @@ Template.prototype.tokenizeData = function (data) {
             }
         }
         if (variable === false) {
-            this.emit('compiled', 'Parsing error: no ending ' + type + ' token.');
+            this.emit('compiled', 'Parsing error: no ending ' + type +
+                    ' token.');
         }
 
     }
@@ -140,68 +152,31 @@ Template.prototype.tokenizeData = function (data) {
 
     this._tokenized = true;
     this.emit('compiled', false, this._blocks);
-    this._render_queue.forEach(function (renderer) {
-            renderer.execute();
-    });
 };
 
-// Playing with template tags
+
+//////////
+// Plugins
+//////////
 Template.tags = {};
-Template.tags['for'] = function (template) {
-
-    // hallo
-    return {
-        render: function (renderer, index) {
-        }
+Template.tags.echo = function (template, args) {
+    return function (renderer, ctx, next) {
+        renderer.write('echo' + args);
+        next();
     };
-};
-
-///////////
-// Renderer
-///////////
-function Renderer(params) {
-    this.template = params.template;
-    this.context = params.context;
-    this.block = 0;
 }
-
-Renderer.prototype = Object.create(events.EventEmitter.prototype);
-
-Renderer.prototype.execute = function () {
-    console.log('fuck yeah');
-    var that = this;
-    (function next() {
-        var block = that.template._blocks[that.block];
-        if (block) {
-            //block.render();
-            console.log(block.type);
-            that.block += 1;
-            next();
-        } else {
-            that.emit('end');
-        }
-    }());
-};
-
-Template.prototype.render = function (context) {
-    var renderer = new Renderer({template: this, context: context});
-
-    if (this._tokenized) {
-        // Allow them to set EventEmitter callbacks first
-        setTimeout(function () {
-            renderer.execute();
-        }, 0);
-    } else {
-        this._render_queue.push(renderer);
-    }
-
-    return renderer;
-};
+Template.filters = {};
+Template.filters.upper = function (template, args) {
+    return function (ctx, input, output) {
+        output(false, input.toUpperCase());
+    };
+}
 
 //////////
 // Testing
 //////////
-var tmpl = Template({file: 'tmpl.html'});
+var tmpl = new Template({file: 'echo.html'});
+
 tmpl.on('compiled', function (err, blocks) {
     if (err) {
         console.log('Parsing error: ', err)
@@ -210,8 +185,10 @@ tmpl.on('compiled', function (err, blocks) {
     }
 });
 
-var renderer = tmpl.render();
-//renderer.on('data', function (err, data) {
-//});
+var renderer = new tmpl.Renderer({hello: 'WA WA WORLD'});
+
+renderer.exec(function (err, data) {
+    console.log(err || data);
+});
 
 // vim: sw=4 ts=4 sts=4 et:
