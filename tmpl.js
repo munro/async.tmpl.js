@@ -45,9 +45,100 @@ Template.prototype.loadFile = function (file) {
 };
 
 Template.prototype.tokenizeData = function (data) {
-    var that = this, tokens, data, i, position, type, token;
+    var that = this, tokens, data, i, position, type, token, variable, block;
 
+    /////////////////////////
+    //////// HELPER FUNCTIONS
+    /////////////////////////
+    function skip_whitespace() {
+        var whitespace = data.substr(position).match(/^\s+/);
+        if (whitespace) {
+            position += whitespace.length;
+        }
+    }
+
+    function read_variable() {
+        var match, token;
+        skip_whitespace();
+        if ((token = that._params.tokens['seperator']) &&
+                data.substr(position, token.length) === token) {
+            position += that._params.tokens['seperator'].length;
+            return {type: 'seperator'};
+        } else if ((token = that._params.tokens['tag'][1]) &&
+                data.substr(position, token.length) === token) {
+            position += that._params.tokens['tag'][1].length;
+            return {type: 'end', name: 'tag'};
+        } else if ((token = that._params.tokens['var'][1]) &&
+                data.substr(position, token.length) === token) {
+            position += that._params.tokens['tag'][1].length;
+            return {type: 'end', name: 'var'};
+        } else if (match =
+                data.substr(position).match(/^[a-zA-Z_$][0-9a-zA-Z_$.]*/)) {
+            position += match[0].length;
+            return {
+                type: 'var',
+                text: match[0]
+            }; 
+        } else if (match = data.substr(position).match(/['"][^'"]*['"]/)) {
+            position += match[0].length;
+            return {
+                type: 'string',
+                text: match[0].substr(1, match[0].length - 2)
+            };
+        } else {
+            return false;
+        }
+    }
+
+    function setupFilterBlock() {
+        var filter, render, i, pipe;
+    
+        function head(renderer, callback) {
+            if (pipe) {
+                pipe(renderer, callback, renderer.context[block.text], callback);
+            } else {
+                callback(false, renderer.context[block.text]);
+            }
+        }
+    
+        for (i = block.filters.length - 1; i >= 0; i -= 1) {
+            filter = block.filters[i];
+    
+            if (!Template.filters.hasOwnProperty(filter.name)) {
+                return 'Parse error: 62';
+            }
+    
+            // Setup filter
+            render = Template.filters[filter.name](this, filter.args);
+    
+            if (typeof render !== 'function') {
+                this.emit('compiled', render);
+            }
+    
+            // Setup pipe
+            pipe = (function (pipe, render) {
+                return function (renderer, callback, input) {
+                    render(renderer.context, input, function (err, value) {
+                        if (!pipe || err) {
+                            callback(err, value);
+                        } else {
+                            pipe(renderer, callback, value);
+                        }
+                    });
+                };
+            }(pipe, render));
+        }
+    
+        block.render = function (renderer, callback) {
+            head(renderer, callback);
+        };
+    
+        return false;
+    }
+
+    /////////////////////////////////////////////
     // Find all possible starting token positions
+    /////////////////////////////////////////////
     tokens = [];
     (function callee(token) {
         var split_tokens = data.split(token), position = 0, i;
@@ -62,7 +153,9 @@ Template.prototype.tokenizeData = function (data) {
         (this._params.tokens['var'][0]));
     tokens.sort();
 
-    // Parse expressions
+    ///////////////////////
+    ///// Parse expressions
+    ///////////////////////
     this._blocks = [];
     position = 0;
     for (i = 0; i < tokens.length; i += 1) {
@@ -81,63 +174,66 @@ Template.prototype.tokenizeData = function (data) {
         token = this._params.tokens['tag'][0];
         type = (data.substr(position, token.length) === token) ? 'tag': 'var';
 
-        // Helper functions
-        function skip_whitespace() {
-            var whitespace = data.substr(position).match(/^\s+/);
-            if (whitespace) {
-                position += whitespace.length;
-            }
-        }
-        function read_variable() {
-            var match, token;
-            skip_whitespace();
-            if ((token = that._params.tokens['seperator']) &&
-                    data.substr(position, token.length) === token) {
-                position += that._params.tokens['seperator'].length;
-                return {type: 'seperator'};
-            } else if ((token = that._params.tokens['tag'][1]) &&
-                    data.substr(position, token.length) === token) {
-                position += that._params.tokens['tag'][1].length;
-                return {type: 'end', name: 'tag'};
-            } else if ((token = that._params.tokens['var'][1]) &&
-                    data.substr(position, token.length) === token) {
-                position += that._params.tokens['tag'][1].length;
-                return {type: 'end', name: 'var'};
-            } else if (match =
-                    data.substr(position).match(/^[a-zA-Z_$][0-9a-zA-Z_$.]*/)) {
-                position += match[0].length;
-                return {
-                    type: 'var',
-                    text: match[0]
-                };
-            } else {
-                return false;
-            }
-        }
-
         // Parser
-        var variable, block;
         position += this._params.tokens[type][0].length;
         block = {
-            type: type,
-            variables: []
+            type: type
         };
         while (variable = read_variable()) {
-            if (variable.type === 'end') {
-                if (variable.name === type) {
-                    this._blocks.push(block);
+            ///////////////////
+            // Var/Filter rules
+            ///////////////////
+            if (block.type === 'var') {
+                // First variable must be a var
+                if (!block.text) {
+                    if (variable.type !== 'var') {
+                        return this.emit('compiled', 'Parse error: 55');
+                    }
+                    block.text = variable.text;
+                // Ending block
+                } else if (variable.type === 'end') {
+                    if (variable.name !== 'var') {
+                        return this.emit('compiled', 'Parse error: 56');
+                    } else if (block.filters &&
+                            !block.filters[block.filters.length - 1].name) {
+                        return this.emit('compiled', 'Parse error: 58');
+                    }
                     break;
+                // Start filter list
+                } else if (!block.filters) {
+                    if (variable.type !== 'seperator') {
+                        return this.emit('compiled', 'Parse error: 57');
+                    }
+                    block.filters = [{}];
+                // Next filter
+                } else if (variable.type === 'seperator') {
+                    if (!block.filters[block.filters.length - 1].name) {
+                        return this.emit('compiled', 'Parse error: 59');
+                    }
+                    block.filters.push({});
+                // Set filter name
+                } else if (!block.filters[block.filters.length - 1].name) {
+                    if (variable.type !== 'var') {
+                        return this.emit('compiled', 'Parse error: 60');
+                    }
+                    block.filters[block.filters.length - 1].name =
+                            variable.text;
+                    block.filters[block.filters.length - 1].args = [];
+                // Push filter argument
                 } else {
-                    this.emit('compiled',
-                            'Parsing error: found incorrect end token type.');
-                    return;
+                    block.filters[block.filters.length - 1].args.push(variable);
                 }
-            } else {
-                block.variables.push(variable);
             }
         }
+        if (block.type === 'var') {
+            var parse_error;
+            if (parse_error = setupFilterBlock()) {
+                return this.emit('compiled', parse_error);
+            }
+        }
+        this._blocks.push(block);
         if (variable === false) {
-            this.emit('compiled', 'Parsing error: no ending ' + type +
+            this.emit('compiled', 'Parse error: no ending ' + type +
                     ' token.');
         }
 
@@ -159,36 +255,47 @@ Template.prototype.tokenizeData = function (data) {
 // Plugins
 //////////
 Template.tags = {};
+
 Template.tags.echo = function (template, args) {
     return function (renderer, ctx, next) {
         renderer.write('echo' + args);
         next();
     };
-}
+};
+
 Template.filters = {};
+
 Template.filters.upper = function (template, args) {
     return function (ctx, input, output) {
         output(false, input.toUpperCase());
     };
-}
+};
+
+Template.filters.lower = function (template, args) {
+    return function (ctx, input, output) {
+        output(false, input.toLowerCase());
+    };
+};
 
 //////////
 // Testing
 //////////
-var tmpl = new Template({file: 'echo.html'});
-
-tmpl.on('compiled', function (err, blocks) {
-    if (err) {
-        console.log('Parsing error: ', err)
-    } else {
-        console.log(blocks);
+(function (main) {
+    if (!main) {
+        return;
     }
-});
 
-var renderer = new tmpl.Renderer({hello: 'WA WA WORLD'});
+    var tmpl = new Template({file: 'echo.html'});
 
-renderer.exec(function (err, data) {
-    console.log(err || data);
-});
+    tmpl.on('compiled', function (err) {
+        err && console.log(err);
+    });
+
+    var renderer = new tmpl.Renderer({hello: 'wa wa world'});
+    
+    renderer.exec(function (err, data) {
+        console.log(err || data);
+    });
+}(require.main === module));
 
 // vim: sw=4 ts=4 sts=4 et:

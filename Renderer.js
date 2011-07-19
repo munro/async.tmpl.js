@@ -20,15 +20,16 @@ Renderer.prototype.exec = function (callback) {
             block = that.template._blocks[that.block];
             if (block.type === 'text') {
                 data += block.text;
-            } /*else {
+            } else {
                 return block.render(that, function (err, output) {
                     if (err) {
                         return that.emit('done', err);
                     }
                     data += output;
-                    //defer();
+                    that.block += 1;
+                    defer();
                 });
-            }*/
+            }
         }
         that.emit('done', false, data);
     };
@@ -37,8 +38,12 @@ Renderer.prototype.exec = function (callback) {
     if (this.template._tokenized) {
         defer();
     } else {
-        this.template.once('compiled', function () {
-            defer();
+        this.template.once('compiled', function (err) {
+            if (err) {
+                that.emit('done', 'Could not render because template failed to tokenize: ' + err);
+            } else {
+                defer();
+            }
         });
     }
 };
