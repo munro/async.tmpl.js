@@ -22,7 +22,6 @@ var fs = require('fs'),
     Args = require('./Args');
 
 function Template(params) {
-    // Construct thisect
     var that = this;
 
     // Set properties
@@ -42,7 +41,7 @@ function Template(params) {
         this.loadFile(params.file);
     }
 
-    // Setup renderer constructor
+    // Setup Renderer wrapper
     this.Renderer = function (context) {
         Renderer.call(this, {
             template: that,
@@ -53,6 +52,9 @@ function Template(params) {
 
     return this;
 }
+
+Template.tags = {};
+Template.filters = {};
 
 Template.prototype = Object.create(events.EventEmitter.prototype);
 
@@ -170,7 +172,6 @@ Template.prototype.tokenizeData = function (data) {
     }
         (this._params.tokens.tag[0])
         (this._params.tokens['var'][0]));
-    //tokens.sort().reverse();
     tokens.sort(function (a, b) {
         return a > b;
     }); // .sort().reverse() was not returning the list in ascending order
@@ -260,7 +261,6 @@ Template.prototype.tokenizeData = function (data) {
             this.emit('compiled', 'Parse error: no ending ' + type +
                     ' token.');
         }
-
     }
 
     if (data.length > position) {
@@ -274,32 +274,6 @@ Template.prototype.tokenizeData = function (data) {
     this.emit('compiled', false, this._blocks);
 };
 
-//////////
-// Plugins
-//////////
-Template.tags = {};
-Template.filters = {};
-require('./plugins')(Template);
-
-//////////
-// Testing
-//////////
-(function (main) {
-    if (!main) {
-        return;
-    }
-
-    var tmpl = new Template({file: 'echo.html'});
-
-    tmpl.on('compiled', function (err) {
-        err && console.log(err);
-    });
-
-    var renderer = new tmpl.Renderer({hello: 'wa wa world'});
-    
-    renderer.exec(function (err, data) {
-        console.log(err || data);
-    });
-}(require.main === module));
+module.exports = Template;
 
 // vim: sw=4 ts=4 sts=4 et:

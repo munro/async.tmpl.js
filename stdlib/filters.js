@@ -17,13 +17,6 @@
 */
 
 module.exports = function (Template) {
-    Template.tags.echo = function (template, args) {
-        return function (renderer, ctx, next) {
-            renderer.write('echo' + args);
-            next();
-        };
-    };
-
     Template.filters.concat = function (template, args) {
         return function (ctx, input, output) {
             output(false, input + args.parse(ctx).join(''));
