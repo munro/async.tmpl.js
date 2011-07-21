@@ -1,3 +1,5 @@
 hello
-{{ hello |upper|lower }}
+{{ hello | upper }}{{ hello | upper | concat 'foo bar' }}
+wa
+{{ hello | upper | concat hello 'hey' }}
 world

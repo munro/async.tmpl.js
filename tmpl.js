@@ -1,6 +1,25 @@
+/*  This file is part of Async.Tmpl.JS.
+
+    Copyright 2011 Ryan Munro <munro.github@gmail.com>.
+
+    Async.Tmpl.JS is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Async.Tmpl.JS is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Async.Tmpl.JS.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 var fs = require('fs'),
     events = require('events'),
-    Renderer = require('./Renderer');
+    Renderer = require('./Renderer'),
+    Args = require('./Args');
 
 function Template(params) {
     // Construct thisect
@@ -45,7 +64,7 @@ Template.prototype.loadFile = function (file) {
 };
 
 Template.prototype.tokenizeData = function (data) {
-    var that = this, tokens, data, i, position, type, token, variable, block;
+    var that = this, tokens, i, position, type, token, variable, block;
 
     /////////////////////////
     //////// HELPER FUNCTIONS
@@ -60,17 +79,17 @@ Template.prototype.tokenizeData = function (data) {
     function read_variable() {
         var match, token;
         skip_whitespace();
-        if ((token = that._params.tokens['seperator']) &&
+        if ((token = that._params.tokens.seperator) &&
                 data.substr(position, token.length) === token) {
-            position += that._params.tokens['seperator'].length;
+            position += that._params.tokens.seperator.length;
             return {type: 'seperator'};
-        } else if ((token = that._params.tokens['tag'][1]) &&
+        } else if ((token = that._params.tokens.tag[1]) &&
                 data.substr(position, token.length) === token) {
-            position += that._params.tokens['tag'][1].length;
+            position += that._params.tokens.tag[1].length;
             return {type: 'end', name: 'tag'};
         } else if ((token = that._params.tokens['var'][1]) &&
                 data.substr(position, token.length) === token) {
-            position += that._params.tokens['tag'][1].length;
+            position += that._params.tokens.tag[1].length;
             return {type: 'end', name: 'var'};
         } else if (match =
                 data.substr(position).match(/^[a-zA-Z_$][0-9a-zA-Z_$.]*/)) {
@@ -149,9 +168,12 @@ Template.prototype.tokenizeData = function (data) {
         }
         return callee;
     }
-        (this._params.tokens['tag'][0])
+        (this._params.tokens.tag[0])
         (this._params.tokens['var'][0]));
-    tokens.sort();
+    //tokens.sort().reverse();
+    tokens.sort(function (a, b) {
+        return a > b;
+    }); // .sort().reverse() was not returning the list in ascending order
 
     ///////////////////////
     ///// Parse expressions
@@ -160,18 +182,20 @@ Template.prototype.tokenizeData = function (data) {
     position = 0;
     for (i = 0; i < tokens.length; i += 1) {
         // Skip to next token
-        if (position >= tokens[i]) {
+        if (position > tokens[i]) {
             continue;
         } else {
-            this._blocks.push({
-                type: 'text',
-                text: data.substr(position, tokens[i] - position)
-            });
+            if (tokens[i] - position) {
+                this._blocks.push({
+                    type: 'text',
+                    text: data.substr(position, tokens[i] - position)
+                });
+            }
             position = tokens[i];
         }
 
         // Parse token type
-        token = this._params.tokens['tag'][0];
+        token = this._params.tokens.tag[0];
         type = (data.substr(position, token.length) === token) ? 'tag': 'var';
 
         // Parser
@@ -218,7 +242,7 @@ Template.prototype.tokenizeData = function (data) {
                     }
                     block.filters[block.filters.length - 1].name =
                             variable.text;
-                    block.filters[block.filters.length - 1].args = [];
+                    block.filters[block.filters.length - 1].args = new Args();
                 // Push filter argument
                 } else {
                     block.filters[block.filters.length - 1].args.push(variable);
@@ -250,32 +274,12 @@ Template.prototype.tokenizeData = function (data) {
     this.emit('compiled', false, this._blocks);
 };
 
-
 //////////
 // Plugins
 //////////
 Template.tags = {};
-
-Template.tags.echo = function (template, args) {
-    return function (renderer, ctx, next) {
-        renderer.write('echo' + args);
-        next();
-    };
-};
-
 Template.filters = {};
-
-Template.filters.upper = function (template, args) {
-    return function (ctx, input, output) {
-        output(false, input.toUpperCase());
-    };
-};
-
-Template.filters.lower = function (template, args) {
-    return function (ctx, input, output) {
-        output(false, input.toLowerCase());
-    };
-};
+require('./plugins')(Template);
 
 //////////
 // Testing
