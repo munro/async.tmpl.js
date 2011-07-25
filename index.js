@@ -16,6 +16,8 @@
     along with Async.Tmpl.JS.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+require('./util');
+
 var Template = require('./Template');
 
 require('./stdlib')(Template);

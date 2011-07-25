@@ -22,7 +22,14 @@ function Args() {
 
 Args.prototype = Object.create(Array.prototype);
 
+Args.prototype.isStatic = function () {
+    return this.every(function (value) {
+        return value.type === 'string';
+    });
+};
+
 Args.prototype.parse = function (ctx) {
+    ctx = ctx || {};
     return this.map(function (value) {
         return value.type === 'string' ? value.text : ctx[value.text];
     });

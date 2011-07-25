@@ -58,6 +58,9 @@ Template.filters = {};
 
 Template.prototype = Object.create(events.EventEmitter.prototype);
 
+Template.prototype.tags = Object.create(Template.tags);
+Template.prototype.filters = Object.create(Template.filters);
+
 Template.prototype.loadFile = function (file) {
     var that = this;
     fs.readFile(file, this._params.encoding, function (err, data) {
@@ -66,49 +69,37 @@ Template.prototype.loadFile = function (file) {
 };
 
 Template.prototype.tokenizeData = function (data) {
-    var that = this, tokens, i, position, type, token, variable, block;
+    var that = this, tokens, i, position, type, token, variable, block,
+        token_regexps;
 
     /////////////////////////
     //////// HELPER FUNCTIONS
     /////////////////////////
-    function skip_whitespace() {
-        var whitespace = data.substr(position).match(/^\s+/);
-        if (whitespace) {
-            position += whitespace.length;
-        }
-    }
+    token_regexps = [
+        {type: 'seperator', regexp: new RegExp('^' +
+                RegExp.escape(that._params.tokens.seperator))},
+        {type: 'end', name: 'tag', regexp: new RegExp('^' +
+                RegExp.escape(that._params.tokens.tag[1]))},
+        {type: 'end', name: 'var', regexp: new RegExp('^' +
+                RegExp.escape(that._params.tokens['var'][1]))},
+        {type: 'var', regexp: /^([a-zA-Z_$][0-9a-zA-Z_$.]*)/},
+        {type: 'string', regexp: /^['"]([^'"]*)['"]/}
+    ];
 
     function read_variable() {
-        var match, token;
-        skip_whitespace();
-        if ((token = that._params.tokens.seperator) &&
-                data.substr(position, token.length) === token) {
-            position += that._params.tokens.seperator.length;
-            return {type: 'seperator'};
-        } else if ((token = that._params.tokens.tag[1]) &&
-                data.substr(position, token.length) === token) {
-            position += that._params.tokens.tag[1].length;
-            return {type: 'end', name: 'tag'};
-        } else if ((token = that._params.tokens['var'][1]) &&
-                data.substr(position, token.length) === token) {
-            position += that._params.tokens.tag[1].length;
-            return {type: 'end', name: 'var'};
-        } else if (match =
-                data.substr(position).match(/^[a-zA-Z_$][0-9a-zA-Z_$.]*/)) {
+        var i, match, block;
+        if (match = data.substr(position).match(/^\s+/)) {
             position += match[0].length;
-            return {
-                type: 'var',
-                text: match[0]
-            }; 
-        } else if (match = data.substr(position).match(/['"][^'"]*['"]/)) {
-            position += match[0].length;
-            return {
-                type: 'string',
-                text: match[0].substr(1, match[0].length - 2)
-            };
-        } else {
-            return false;
         }
+        for (i = 0; i < token_regexps.length; i += 1) {
+            if ((match = data.substr(position).match(token_regexps[i].regexp))) {
+                position += match[0].length;
+                block = Object.create(token_regexps[i]);
+                block.text = match[1];
+                return block;
+            }
+        }
+        return false;
     }
 
     function setupFilterBlock() {
@@ -125,12 +116,12 @@ Template.prototype.tokenizeData = function (data) {
         for (i = block.filters.length - 1; i >= 0; i -= 1) {
             filter = block.filters[i];
     
-            if (!Template.filters.hasOwnProperty(filter.name)) {
+            if (!(filter.name in that.filters) || Object.hasOwnProperty(filter.name)) {
                 return 'Parse error: 62';
             }
     
             // Setup filter
-            render = Template.filters[filter.name](this, filter.args);
+            render = that.filters[filter.name](this, filter.args);
     
             if (typeof render !== 'function') {
                 this.emit('compiled', render);
