@@ -1,5 +1,11 @@
+<!-- var start -->
 hello
-{{  hello | upper }}{{ hello | upper |   concat 'foo bar'  'rawr'  }}
+{{ hello | upper }}{{ hello | upper | concat 'foo bar'  'rawr'  }}
 wa
 {{ hello | upper | concat hello 'hey' }}
 world
+<!-- var end -->
+
+<!-- tag start -->
+{% echo 'woooo' hello 'wut' %}
+<!-- tag end -->

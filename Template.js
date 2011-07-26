@@ -57,7 +57,6 @@ Template.tags = {};
 Template.filters = {};
 
 Template.prototype = Object.create(events.EventEmitter.prototype);
-
 Template.prototype.tags = Object.create(Template.tags);
 Template.prototype.filters = Object.create(Template.filters);
 
@@ -105,23 +104,16 @@ Template.prototype.tokenizeData = function (data) {
     function setupFilterBlock() {
         var filter, render, i, pipe;
     
-        function head(renderer, callback) {
-            if (pipe) {
-                pipe(renderer, callback, renderer.context[block.text], callback);
-            } else {
-                callback(false, renderer.context[block.text]);
-            }
-        }
-    
         for (i = block.filters.length - 1; i >= 0; i -= 1) {
             filter = block.filters[i];
     
-            if (!(filter.name in that.filters) || Object.hasOwnProperty(filter.name)) {
+            if (!(filter.name in that.filters) ||
+                    Object.hasOwnProperty(filter.name)) {
                 return 'Parse error: 62';
             }
     
             // Setup filter
-            render = that.filters[filter.name](this, filter.args);
+            render = that.filters[filter.name](that, filter.args);
     
             if (typeof render !== 'function') {
                 this.emit('compiled', render);
@@ -141,11 +133,31 @@ Template.prototype.tokenizeData = function (data) {
             }(pipe, render));
         }
     
-        block.render = function (renderer, callback) {
-            head(renderer, callback);
-        };
+        (function (block) {
+            block.render = function (renderer, callback) {
+                if (pipe) {
+                    pipe(renderer, callback, renderer.context[block.text],
+                        callback);
+                } else {
+                    callback(false, renderer.context[block.text]);
+                }
+            };
+        }(block));
     
         return false;
+    }
+
+    function setupTagBlock() {
+        if (!(block.text in that.tags) || Object.hasOwnProperty(block.text)) {
+            return 'Parse error: 95';
+        }
+
+        block.render = (function (tag) {
+            return function (renderer, callback) {
+                //callback(false, 'weeeee');
+                tag(renderer, renderer.context, callback);
+            };
+        }(that.tags[block.text](that, block.args)));
     }
 
     /////////////////////////////////////////////
@@ -239,11 +251,38 @@ Template.prototype.tokenizeData = function (data) {
                 } else {
                     block.filters[block.filters.length - 1].args.push(variable);
                 }
+            ////////////
+            // Tag rules
+            ////////////
+            } else if (block.type === 'tag') {
+                if (!block.text) {
+                    if (variable.type !== 'var') {
+                        return this.emit('compiled', 'Parse error: 91');
+                    }
+                    block.text = variable.text;
+                    block.args = new Args();
+                // Ending block
+                } else if (variable.type === 'end') {
+                    if (variable.name !== 'tag') {
+                        return this.emit('compiled', 'Parse error: 92');
+                    }
+                    break;
+                // No seperators allowed!
+                } else if (variable.type === 'seperator') {
+                    return this.emit('compiled', 'Parse error: 93');
+                // Push variables on the arg list
+                } else {
+                    block.args.push(variable);
+                }
             }
         }
         if (block.type === 'var') {
             var parse_error;
             if (parse_error = setupFilterBlock()) {
+                return this.emit('compiled', parse_error);
+            }
+        } else if (block.type === 'tag') {
+            if (parse_error = setupTagBlock()) {
                 return this.emit('compiled', parse_error);
             }
         }

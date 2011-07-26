@@ -18,9 +18,8 @@
 
 module.exports = function (Template) {
     Template.tags.echo = function (template, args) {
-        return function (renderer, ctx, next) {
-            renderer.write('echo' + args);
-            next();
+        return function (renderer, ctx, output) {
+            output(false, 'echo ' + args.parse(ctx).join());
         };
     };
 };
