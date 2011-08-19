@@ -35,26 +35,35 @@ function Template(params) {
         },
         encoding: 'utf8'
     }; // .merge(params);
+    this.__token_regexps = [
+        {type: 'seperator', regexp: new RegExp('^' +
+                RegExp.escape(this._params.tokens.seperator))},
+        {type: 'end', name: 'tag', regexp: new RegExp('^' +
+                RegExp.escape(this._params.tokens.tag[1]))},
+        {type: 'end', name: 'var', regexp: new RegExp('^' +
+                RegExp.escape(this._params.tokens['var'][1]))},
+        {type: 'var', regexp: /^([a-zA-Z_$][0-9a-zA-Z_$.]*)/},
+        {type: 'string', regexp: /^['"]([^'"]*)['"]/}
+    ];
 
     // Load file
     if (params.file) {
         this.loadFile(params.file);
     }
 
-    // Setup Renderer wrapper
-    this.Renderer = function (context) {
-        Renderer.call(this, {
-            template: that,
-            context: context
-        });
-    };
-    this.Renderer.prototype = Renderer.prototype;
-
     return this;
 }
 
 Template.tags = {};
 Template.filters = {};
+Template.options = {
+    tokens: {
+        tag: ['{%', '%}'],
+        'var': ['{{', '}}'],
+        seperator: '|'
+    },
+    encoding: 'utf8'
+};
 
 Template.prototype = Object.create(events.EventEmitter.prototype);
 Template.prototype.tags = Object.create(Template.tags);
@@ -67,33 +76,30 @@ Template.prototype.loadFile = function (file) {
     });
 };
 
+Template.prototype.render = function(context, callback) {
+    var renderer = new Renderer({
+        template: this,
+        context: context
+    });
+    renderer.exec(callback);
+    return renderer;
+};
+
 Template.prototype.tokenizeData = function (data) {
-    var that = this, tokens, i, position, type, token, variable, block,
-        token_regexps;
+    var that = this, tokens, i, position, type, token, variable, block;
 
     /////////////////////////
     //////// HELPER FUNCTIONS
     /////////////////////////
-    token_regexps = [
-        {type: 'seperator', regexp: new RegExp('^' +
-                RegExp.escape(that._params.tokens.seperator))},
-        {type: 'end', name: 'tag', regexp: new RegExp('^' +
-                RegExp.escape(that._params.tokens.tag[1]))},
-        {type: 'end', name: 'var', regexp: new RegExp('^' +
-                RegExp.escape(that._params.tokens['var'][1]))},
-        {type: 'var', regexp: /^([a-zA-Z_$][0-9a-zA-Z_$.]*)/},
-        {type: 'string', regexp: /^['"]([^'"]*)['"]/}
-    ];
-
     function read_variable() {
         var i, match, block;
         if (match = data.substr(position).match(/^\s+/)) {
             position += match[0].length;
         }
-        for (i = 0; i < token_regexps.length; i += 1) {
-            if ((match = data.substr(position).match(token_regexps[i].regexp))) {
+        for (i = 0; i < that.__token_regexps.length; i += 1) {
+            if ((match = data.substr(position).match(that.__token_regexps[i].regexp))) {
                 position += match[0].length;
-                block = Object.create(token_regexps[i]);
+                block = Object.create(that.__token_regexps[i]);
                 block.text = match[1];
                 return block;
             }
@@ -149,7 +155,7 @@ Template.prototype.tokenizeData = function (data) {
 
     function setupTagBlock() {
         if (!(block.text in that.tags) || Object.hasOwnProperty(block.text)) {
-            return 'Parse error: 95';
+            return 'Template parse error #95: Missing tag `' + block.text + '`';
         }
 
         block.render = (function (tag) {

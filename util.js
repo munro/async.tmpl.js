@@ -16,34 +16,10 @@
     along with Async.Tmpl.JS.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-require('./util');
-
-var Template = require('./Template');
-
-require('./stdlib')(Template);
-module.exports = Template;
-
-//////////
-// Testing
-//////////
-function main() {
-    var tmpl, renderer;
-
-    // Compile template
-    tmpl = new Template({file: 'echo.html'});
-
-    tmpl.on('compiled', function (err) {
-        err && console.log(err);
-    });
-
-    // Render template
-    tmpl.render({
-        hello: 'wa wa world',
-        foo: true
-    }, function (err, data) {
-        console.log(err || data);
-    });
+if (typeof RegExp['escape'] === 'undefined') {
+    RegExp['escape'] = function (str) {
+        return str.replace(/([/'*+?|()\[\]{}.^$])/g, '\\$1');
+    };
 }
-(require.main === module) && main();
 
 // vim: sw=4 ts=4 sts=4 et:
