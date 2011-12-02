@@ -18,50 +18,52 @@
 
 var Parser = require('./parser').Parser;
 
-function logPipe(data) {
+var logPipe = exports.logPipe = function (data) {
     console.log(data);
     return data;
-}
+};
 
 /*** Syntax ***/
-function matchAnyWhitespace(parser) {
-    return parser.match('[ \n\t\r]*', '', function () {
+var matchAnyWhitespace = exports.matchAnyWhitespace = function (parser) {
+    return parser.match(/^[ \n\t\r]*/, '', function () {
         return {
             type: 'any-whitespace'
         };
     });
-}
+};
 
-function matchWhitespace(parser) {
-    return parser.match('[ \n\t\r]+', 'expected whitespace', function () {
+var matchWhitespace = exports.matchWhitespace = function (parser) {
+    return parser.match(/^[ \n\t\r]+/, 'expected whitespace', function () {
         return {
             type: 'whitespace'
         };
     });
-}
+};
 
-function matchText(parser, str) {
-    return parser.match(/*RegExp.escape()*/ str, 'expected literal `' + str + '`', function (match) {
+var matchText = exports.matchText = function (parser, str) {
+    return parser.match(str, 'expected literal `' + str + '`', function (match) {
         return {
             type: 'text',
             text: match
         };
     });
-}
+};
 
 /* Literals */
-function matchNull(parser) {
-    if (matchText('null')) {
+var matchNull = exports.matchNull = function (parser) {
+    var match;
+    if ((match = matchText(parser, 'null'))) {
         return {
             type: 'null',
             literal: true
         };
     } else {
-        parser.error = new SyntaxError(parser, 'expected boolean');
+        parser.error = new SyntaxError(parser, 'expected null');
+        return false;
     }
-}
+};
 
-function matchBoolean(parser) {
+var matchBoolean = exports.matchBoolean = function (parser) {
     var bool;
     if ((bool = matchText('true')) || (bool = matchText('false'))) {
         return {
@@ -72,41 +74,67 @@ function matchBoolean(parser) {
     } else {
         parser.error = new SyntaxError(parser, 'expected boolean');
     }
-}
+};
 
-function matchNumber() {
-}
+var matchNumber = exports.matchNumber = function (parser) {
+    var match, eval_str;
+    // Decimal
+    console.log(parser.code);
+    if ((match = parser.match(/^([1-9][0-9]*|0)(\.[0-9]+|\.)?/)) !== false) {
 
-function matchObjectFn(parser, test) {
-}
+        eval_str = match;
+        // Scientific Notation
+        if ((match = parser.match(/e[+\-]([1-9][0-9]*|0)/)) !== false) {
+        } else {
+        }
+    // Hexidecimal
+    } else if ((match = parser.match(/^0x[A-Fa-f0-9]\+/)) !== false) {
+        eval_str = match;
+    } else {
+        parser.error = new SyntaxError(parser, 'expected number');
+        return false;
+    }
 
-function matchObject() {
-}
+    // NaN
+    // Infinity
+    parser.error = false;
 
-function matchLiteralObject() {
-}
+    return {
+        type: 'number',
+        value: eval(eval_str)
+    };
+};
 
-function matchArrayFn() {
-}
+var matchObjectFn = exports.matchObjectFn = function (parser, test) {
+};
 
-function matchArray() {
-}
+var matchObject = exports.matchObject = function () {
+};
 
-function matchLiteralArray() {
-}
+var matchLiteralObject = exports.matchLiteralObject = function () {
+};
 
-function matchLiteral() {
-}
+var matchArrayFn = exports.matchArrayFn = function () {
+};
+
+var matchArray = exports.matchArray = function () {
+};
+
+var matchLiteralArray = exports.matchLiteralArray = function () {
+};
+
+var matchLiteral = exports.matchLiteral = function () {
+};
 
 /* Variables */
-function matchVariableName(parser) {
-    return parser.match('[a-zA-Z_$][0-9a-zA-Z_$]*', 'Expected single variable', function (match) {
+var matchVariableName = exports.matchVariableName = function (parser) {
+    return parser.match(/^[a-zA-Z_$][0-9a-zA-Z_$]*/, 'Expected single variable', function (match) {
         return {
             type: 'variable-name',
             text: match
         };
     });
-}
+};
 
 /**
  * matchVariable
@@ -118,7 +146,7 @@ function matchVariableName(parser) {
  *     text: ['VAR1', 'VAR2', ...]
  * }
  */
-function matchVariable(parser) {
+var matchVariable = exports.matchVariable = function (parser) {
     var fork, match, vars = [];
 
     if ((match = matchVariableName(parser))) {
@@ -142,12 +170,12 @@ function matchVariable(parser) {
     } else {
         // The error message from `matchVariableName` is sufficient
     }
-}
+};
 
 /* Expression */
 
 /* Sugar Syntax */
-function matchKeyValue(parser) {
+var matchKeyValue = exports.matchKeyValue = function (parser) {
     var var1, var2;
     if ((var1 = matchVariableName(parser))) {
         var fork = parser.fork();
@@ -169,11 +197,11 @@ function matchKeyValue(parser) {
             };
         }
     }
-}
+};
 
 
 /*** Rules ***/
-function matchFor(parser) {
+var matchFor = exports.matchFor = function (parser) {
     var key_value, obj;
     if (matchAnyWhitespace(parser) &&
         matchText(parser, 'for') &&
@@ -193,9 +221,10 @@ function matchFor(parser) {
         console.log('ERROR', parser.error);
         //this.error.message = 'invalid for statement: ' + this.error.message;
     }
-}
+};
 
 // Testing
+if (false) {
 var str = ' hello world \n' +
           '  for meow.hello \n' +
           'for hey, forl  in rwar';
@@ -221,3 +250,4 @@ logPipe(matchVariable(parser));
 logPipe(matchWhitespace(parser));
 logPipe(matchFor(parser));
 console.log(parser.error.trace);
+}

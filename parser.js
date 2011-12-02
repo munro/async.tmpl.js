@@ -24,7 +24,7 @@
  */
 function SyntaxError(parser, message) {
     this.position = parser.position;
-    this.message = message;
+    this.message = message || 'undefined syntax error';
     this.trace = '';
     var after = parser.template.substr(parser.position).split('\n')[0],
         before = parser.template.substr(0, parser.position).split('\n');
@@ -35,7 +35,7 @@ function SyntaxError(parser, message) {
         this.trace += ' ';
     }
     this.trace += '^\n';
-    this.trace += this.name + ': ' + message[0].toUpperCase() + message.substr(1);
+    this.trace += this.name + ': ' + this.message[0].toUpperCase() + this.message.substr(1);
 }
 exports.SyntaxError = SyntaxError;
 
@@ -68,25 +68,32 @@ exports.Parser = Parser;
 /**
  * Parser.prototype.match
  *
- * @param regex String containing a regular expression match next.
+ * @param regexp String containing a regular expression match next.
  * @param err_message Error message to throw if the syntax cannot be matched.
  * @param callback Map function to wrap the successful match.  Recieves the
  *                 matched string, and is expected to return a syntax object.
  * @return Object False if failed, otherwise the mapped matched.
  */
-Parser.prototype.match = function (regex, err_message, callback) {
-    var match = this.code.match(new RegExp('^' + regex));
+Parser.prototype.match = function (regexp, err_message, callback) {
+    var match = false;
 
-    if (!match) {
+    if (regexp instanceof RegExp) {
+        match = this.code.match(new RegExp('^' + regexp));
+        match = (match ? match[0] : false);
+    } else if (typeof regexp === 'string' && regexp === this.code.substr(0, regexp.length)) {
+        match = regexp;
+    }
+
+    if (match === false) {
         this.error = new SyntaxError(this, err_message);
         this.errors.push(this.error);
         return false;
     } else if (callback) {
         this.error = false;
         this.errors = [];
-        this.position += match[0].length;
-        this.code = this.code.substr(match[0].length);
-        return callback(match[0]);
+        this.position += match.length;
+        this.code = this.code.substr(match.length);
+        return callback(match);
     }
 };
 

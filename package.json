@@ -1,0 +1,20 @@
+{
+  "author": "Ryan Munro <munro.github@gmail.com> (http://0x0539.org/)",
+  "name": "feather",
+  "description": "Jinja inspired templating with an ascyncronous twist.",
+  "version": "0.1.0",
+  "homepage": "https://github.com/munro/feather",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/munro/async.tmpl.js.git"
+  },
+  "main": "./lib/index.js",
+  "scripts": {
+    "test": "./node_modules/expresso/bin/expresso ./tests/*"
+  },
+  "engines": {
+    "node": "~0.6.3"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
