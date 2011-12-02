@@ -73,36 +73,55 @@ var matchBoolean = exports.matchBoolean = function (parser) {
         };
     } else {
         parser.error = new SyntaxError(parser, 'expected boolean');
+		return false;
     }
 };
 
 var matchNumber = exports.matchNumber = function (parser) {
-    var match, eval_str;
-    // Decimal
-    console.log(parser.code);
-    if ((match = parser.match(/^([1-9][0-9]*|0)(\.[0-9]+|\.)?/)) !== false) {
+    var match, eval_str = '';
 
-        eval_str = match;
-        // Scientific Notation
-        if ((match = parser.match(/e[+\-]([1-9][0-9]*|0)/)) !== false) {
-        } else {
-        }
+    var fork = parser.fork();
+    if (fork.match(/^-/)) {
+        eval_str = '-';
+    }
+
     // Hexidecimal
-    } else if ((match = parser.match(/^0x[A-Fa-f0-9]\+/)) !== false) {
-        eval_str = match;
+    if ((match = fork.match(/^0x[A-Fa-f0-9]+/)) !== false) {
+        eval_str += match;
+    // Decimal
+    } else if ((match = fork.match(/^(([1-9][0-9]*|0)(\.[0-9]+|\.)?|\.[0-9]+)/)) !== false) {
+        eval_str += match;
+        // Scientific Notation
+        if ((match = fork.match(/e[+\-]([1-9][0-9]*|0)/)) !== false) {
+            eval_str += match;
+        }
+    // Infinity & NaN
+    } else if ((match = fork.match(/Infinity|NaN/))) {
+        eval_str += match;
     } else {
-        parser.error = new SyntaxError(parser, 'expected number');
+        parser.error = new SyntaxError(fork, 'expected number');
         return false;
     }
 
-    // NaN
-    // Infinity
+    parser.join(fork);
+
     parser.error = false;
 
     return {
         type: 'number',
         value: eval(eval_str)
     };
+};
+
+var matchString = exports.matchString = function (parser) {
+    var fork = parser.fork();
+    return fork.match(/'[^'\\]*(?:\\.[^'\\]*)*'/, 'expected string', function (match) {
+        parser.join(fork);
+        return {
+            type: 'string',
+            text: eval(match)
+        };
+    });
 };
 
 var matchObjectFn = exports.matchObjectFn = function (parser, test) {

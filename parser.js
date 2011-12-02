@@ -78,7 +78,7 @@ Parser.prototype.match = function (regexp, err_message, callback) {
     var match = false;
 
     if (regexp instanceof RegExp) {
-        match = this.code.match(new RegExp('^' + regexp));
+        match = this.code.match(regexp);
         match = (match ? match[0] : false);
     } else if (typeof regexp === 'string' && regexp === this.code.substr(0, regexp.length)) {
         match = regexp;
@@ -88,12 +88,12 @@ Parser.prototype.match = function (regexp, err_message, callback) {
         this.error = new SyntaxError(this, err_message);
         this.errors.push(this.error);
         return false;
-    } else if (callback) {
+    } else {
         this.error = false;
         this.errors = [];
         this.position += match.length;
         this.code = this.code.substr(match.length);
-        return callback(match);
+        return (callback ? callback(match) : match);
     }
 };
 

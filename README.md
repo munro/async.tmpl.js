@@ -15,6 +15,16 @@
         {% set row_class = cycler('odd', 'even') %}
         {{ row_class.next() %}
 
+        {% for blah in hello.callback() %}
+
+        {% set meow = defer hello.callback %}
+
+        {% for blah in defer hello.callback %}
+
+        {% for blah in stream hello.stream %}
+
+        {{ meow }}
+
 ### Literals
 
 #### Numbers
